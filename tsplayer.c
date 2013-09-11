@@ -36,10 +36,10 @@ static void on_pad_added (GstElement *element, GstPad *pad, gpointer data) {
 	gst_object_unref(sinkpad);
 }
 
+
 int main(int argc, char *argv[]) {
 	GMainLoop *loop;
 	GstElement *pipeline, *source, *demuxer, *vdecoder, *adecoder, *aconv, *vsink, *asink;
-	GstElement *dtcpip;
 	//GstElement *sink;
 	GstBus *bus;
 	guint bus_watch_id;
@@ -53,11 +53,19 @@ int main(int argc, char *argv[]) {
 	}
 
 	pipeline = gst_pipeline_new("ts-player");
+
+    bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
+    gst_bus_add_watch (bus,bus_call,loop);
+    gst_object_unref(bus);
+
 	source = gst_element_factory_make("filesrc","file-source");
+
+    //video
 	demuxer = gst_element_factory_make("mpegtsdemux", "mpeg2ts-demuxer");
-	dtcpip  = gst_element_factory_make("vldtcpip", "dtcpip-filter");
 	vdecoder = gst_element_factory_make("mpeg2dec", "mpeg2-video-decoder");
 	vsink = gst_element_factory_make("autovideosink", "video-output");
+
+    //audio
 	adecoder = gst_element_factory_make("a25dec", "mpeg2-audio-decoder");
 	aconv = gst_element_factory_make("audioconvert", "converter");
 	asink = gst_element_factory_make("autoaudiosink", "audio-output");
@@ -69,22 +77,18 @@ int main(int argc, char *argv[]) {
 	}
 
 	g_object_set(G_OBJECT(source), "location", argv[1], NULL);
-	g_object_set(G_OBJECT(demuxer), "program-number", atoi(argv[2]), NULL);
-#if 1
-	gst_bin_add_many(GST_BIN(pipeline), source, dtcpip, demuxer, vdecoder, vsink, NULL);
-	gst_bin_add_many(GST_BIN(pipeline), adecoder, aconv, asink, NULL);
-	gst_element_link(source , dtcpip);
-	gst_element_link(dtcpip ,demuxer);
-	//gst_element_link(demuxer, vdecoder);
+    g_object_set(G_OBJECT(demuxer), "program-number", atoi(argv[2]), NULL);
+
+	gst_bin_add_many(GST_BIN(pipeline), source, demuxer, vdecoder, vsink, NULL);
+	gst_element_link(source , demuxer);
+    gst_element_link(demuxer, vdecoder);
 	gst_element_link(vdecoder, vsink);
-	//gst_element_link(demuxer, adecoder);
-	//gst_element_link(adecoder, asink);
-	gst_element_link_many(adecoder, aconv, asink, NULL);
-#else 
-	gst_bin_add_many(GST_BIN(pipeline), source ,demuxer, decoder, sink, NULL);
-	gst_element_link(source ,demuxer);
-	gst_element_link_many(decoder, sink, NULL);
-#endif
+
+    gst_bin_add_many(GST_BIN(pipeline), adecoder, aconv, asink, NULL);
+    gst_element_link(demuxer, adecoder);
+    gst_element_link(adecoder, aconv);
+    gst_element_link(aconv, asink);
+
 	g_signal_connect(demuxer, "pad-added", G_CALLBACK(on_pad_added), vdecoder);
 	g_signal_connect(demuxer, "pad-added", G_CALLBACK(on_pad_added), adecoder);
 
